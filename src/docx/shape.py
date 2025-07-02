@@ -106,32 +106,119 @@ class InlineShape:
 class Textbox:
     """Proxy for a VML textbox element, providing access to textbox properties and content."""
 
-    def __init__(self, pict: CT_Pict):
+    def __init__(self, pict: CT_Pict, run=None):
+        from typing import TYPE_CHECKING
+        if TYPE_CHECKING:
+            from docx.text.run import Run
+        
         super(Textbox, self).__init__()
         self._pict = pict
         self._shape = pict.shape
         self._textbox = self._shape.textbox
+        self._run: Run | None = run  # Reference to the run that contains this textbox
+
+    @property
+    def paragraphs(self):
+        """A list of Paragraph objects for each paragraph in the textbox."""
+        from docx.text.paragraph import Paragraph
+        
+        txbx_content = self._textbox.txbxContent
+        if txbx_content is None:
+            return []
+        
+        # Use the run as parent for story part access
+        parent = self._run if self._run is not None else self
+        try:
+            return [Paragraph(p, parent) for p in txbx_content.p_lst]
+        except AttributeError:
+            # Fallback if p_lst doesn't exist
+            paragraphs = []
+            for child in txbx_content:
+                if child.tag.endswith('}p'):  # Check for paragraph elements
+                    paragraphs.append(Paragraph(child, parent))
+            return paragraphs
+
+    def add_paragraph(self, text: str = "", style=None):
+        """Add a new paragraph to the textbox.
+        
+        Args:
+            text: Initial text for the paragraph
+            style: Paragraph style to apply
+            
+        Returns:
+            The new Paragraph object
+        """
+        from docx.oxml.parser import parse_xml
+        from docx.text.paragraph import Paragraph
+        
+        # Create new paragraph XML
+        p_xml = '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:p>'
+        p_element = parse_xml(p_xml)
+        
+        # Get or create textbox content
+        txbx_content = self._textbox.txbxContent
+        if txbx_content is None:
+            # Create textbox content if it doesn't exist
+            from docx.oxml.ns import nsdecls
+            txbx_content_xml = f"<w:txbxContent {nsdecls('w')}></w:txbxContent>"
+            txbx_content = parse_xml(txbx_content_xml)
+            self._textbox.append(txbx_content)
+        
+        # Add paragraph to textbox content
+        txbx_content.append(p_element)
+        
+        # Create Paragraph object using run as parent
+        parent = self._run if self._run is not None else self
+        paragraph = Paragraph(p_element, parent)
+        
+        # Add text if provided
+        if text:
+            paragraph.add_run(text)
+            
+        # Apply style if provided
+        if style is not None:
+            paragraph.style = style
+            
+        return paragraph
+
+    def clear(self):
+        """Remove all paragraphs from the textbox."""
+        txbx_content = self._textbox.txbxContent
+        if txbx_content is not None:
+            # Remove all paragraph elements
+            try:
+                for p in txbx_content.p_lst:
+                    txbx_content.remove(p)
+            except AttributeError:
+                # Fallback if p_lst doesn't exist
+                for child in list(txbx_content):  # Create a copy to avoid modification during iteration
+                    if child.tag.endswith('}p'):  # Check for paragraph elements
+                        txbx_content.remove(child)
 
     @property
     def text(self) -> str:
         """Read/write.
 
-        The text content of the textbox. For now, this is a placeholder
-        that returns empty string. Text content management will be enhanced
-        in future versions.
+        The text content of the textbox. This gets/sets the combined text
+        of all paragraphs in the textbox.
         """
-        # Simplified implementation for now
-        return ""
+        paragraphs = self.paragraphs
+        if not paragraphs:
+            return ""
+        return "\n".join(p.text for p in paragraphs)
 
     @text.setter
     def text(self, value: str):
         """Set the text content of the textbox.
 
-        This is a placeholder implementation. Text content management
-        will be enhanced in future versions.
+        This replaces all existing content with a single paragraph containing the text.
         """
-        # Simplified implementation for now
-        pass
+        # Clear existing content
+        self.clear()
+        
+        # Add new paragraph with the text
+        if value:
+            self.add_paragraph(value)
 
     @property
     def left(self) -> float:

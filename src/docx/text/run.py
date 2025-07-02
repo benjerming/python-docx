@@ -98,11 +98,11 @@ class Run(StoryChild):
 
     def add_textbox(
         self,
-        text: str,
         left: float,
         top: float,
         width: float,
         height: float,
+        text: str = "",
         font_size: int = 12,
         z_index: int = 0xFFFFFFFF,
         direction: str = "horizontal",
@@ -110,24 +110,28 @@ class Run(StoryChild):
         """Add a textbox to this run.
 
         Args:
-            text: Text content for the textbox
             left: Left position in points
             top: Top position in points
             width: Width in points
             height: Height in points
+            text: Initial text content for the textbox (optional)
             font_size: Font size for the text (default: 12)
             z_index: Z-index for layering (default: 0xFFFFFFFF)
             direction: Text direction, "horizontal" or "vertical" (default: "horizontal")
 
         Returns:
-            The textbox object (currently a CT_Pict element)
+            The textbox object that allows access to paragraphs
         """
         from docx.oxml.ns import nsdecls
         from docx.oxml.parser import parse_xml
         from docx.oxml.shape import CT_Pict, CT_TxbxContent
 
-        # Create paragraph XML for textbox content
-        p_xml = self._create_textbox_paragraph_xml(text, font_size)
+        # Create textbox content element with an empty paragraph if no text provided
+        if text:
+            p_xml = self._create_textbox_paragraph_xml(text, font_size)
+        else:
+            # Create empty paragraph
+            p_xml = f'<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:p>'
 
         # Create textbox content element using parse_xml
         txbx_content_xml = f"<w:txbxContent {nsdecls('w')}>{p_xml}</w:txbxContent>"
@@ -164,7 +168,7 @@ class Run(StoryChild):
         # Add pict to the run
         self._r.append(pict)
 
-        return Textbox(pict)
+        return Textbox(pict, self)
 
     def _create_textbox_paragraph_xml(self, text: str, font_size: int) -> str:
         """Create XML for a paragraph within a textbox."""
