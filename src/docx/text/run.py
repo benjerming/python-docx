@@ -106,6 +106,7 @@ class Run(StoryChild):
         font_size: int = 12,
         z_index: int = 0xFFFFFFFF,
         direction: str = "horizontal",
+        position_relative: str = "paragraph",
     ):
         """Add a textbox to this run.
 
@@ -118,6 +119,7 @@ class Run(StoryChild):
             font_size: Font size for the text (default: 12)
             z_index: Z-index for layering (default: 0xFFFFFFFF)
             direction: Text direction, "horizontal" or "vertical" (default: "horizontal")
+            position_relative: Position reference, "paragraph" or "page" (default: "paragraph")
 
         Returns:
             The textbox object that allows access to paragraphs
@@ -137,13 +139,21 @@ class Run(StoryChild):
         txbx_content_xml = f"<w:txbxContent {nsdecls('w')}>{p_xml}</w:txbxContent>"
         txbx_content = cast(CT_TxbxContent, parse_xml(txbx_content_xml))
 
+        # Set position relative attributes based on position_relative parameter
+        if position_relative.lower() == "page":
+            position_v_relative = "page"
+            position_h_relative = "page"
+        else:  # default to "paragraph" or "text"
+            position_v_relative = "text"
+            position_h_relative = "text"
+
         # Create VML shape with textbox
         style = (
             f"position:absolute;"
             f"margin-left:{round(left, 3)}pt;"
             f"margin-top:{round(top, 3)}pt;"
-            f"mso-position-vertical-relative:text;"
-            f"mso-position-horizontal-relative:text;"
+            f"mso-position-vertical-relative:{position_v_relative};"
+            f"mso-position-horizontal-relative:{position_h_relative};"
             f"width:{round(width, 3)}pt;"
             f"height:{round(height, 3)}pt;"
             f"z-index:{z_index};"
