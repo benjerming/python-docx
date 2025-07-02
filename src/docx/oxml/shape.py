@@ -19,6 +19,7 @@ from docx.oxml.xmlchemy import (
     OneAndOnlyOne,
     OptionalAttribute,
     RequiredAttribute,
+    ZeroOrMore,
     ZeroOrOne,
 )
 
@@ -297,3 +298,101 @@ class CT_Transform2D(BaseOxmlElement):
     def cy(self, value):
         ext = self.get_or_add_ext()
         ext.cy = value
+
+
+# VML (Vector Markup Language) elements for textbox support
+
+
+class CT_VmlFill(BaseOxmlElement):
+    """``<v:fill>`` element, specifies fill properties for VML shapes."""
+
+    on: str | None = OptionalAttribute("on", XsdString)  # pyright: ignore[reportAssignmentType]
+
+
+class CT_VmlStroke(BaseOxmlElement):
+    """``<v:stroke>`` element, specifies stroke properties for VML shapes."""
+
+    on: str | None = OptionalAttribute("on", XsdString)  # pyright: ignore[reportAssignmentType]
+
+
+class CT_VmlPath(BaseOxmlElement):
+    """``<v:path>`` element, specifies path properties for VML shapes."""
+
+
+class CT_TxbxContent(BaseOxmlElement):
+    """``<w:txbxContent>`` element, contains the textbox content (paragraphs, etc.)."""
+
+    p = ZeroOrMore("w:p")  # Allow multiple paragraphs in textbox
+
+    def add_paragraph_xml(self, p_xml: str):
+        """Add a paragraph to the textbox content by parsing XML."""
+        p_element = parse_xml(p_xml)
+        self.append(p_element)
+
+
+class CT_VmlTextbox(BaseOxmlElement):
+    """``<v:textbox>`` element, container for textbox content."""
+
+    inset: str | None = OptionalAttribute("inset", XsdString)  # pyright: ignore[reportAssignmentType]
+    style: str | None = OptionalAttribute("style", XsdString)  # pyright: ignore[reportAssignmentType]
+
+    txbxContent: CT_TxbxContent = ZeroOrOne("w:txbxContent")  # pyright: ignore[reportAssignmentType]
+
+
+class CT_VmlShape(BaseOxmlElement):
+    """``<v:shape>`` element, a VML shape object."""
+
+    id: str | None = OptionalAttribute("id", XsdString)  # pyright: ignore[reportAssignmentType]
+    type: str | None = OptionalAttribute("type", XsdString)  # pyright: ignore[reportAssignmentType]
+    style: str | None = OptionalAttribute("style", XsdString)  # pyright: ignore[reportAssignmentType]
+    filled: str | None = OptionalAttribute("filled", XsdString)  # pyright: ignore[reportAssignmentType]
+    stroked: str | None = OptionalAttribute("stroked", XsdString)  # pyright: ignore[reportAssignmentType]
+
+    fill: CT_VmlFill = ZeroOrOne("v:fill")  # pyright: ignore[reportAssignmentType]
+    stroke: CT_VmlStroke = ZeroOrOne("v:stroke")  # pyright: ignore[reportAssignmentType]
+    path: CT_VmlPath = ZeroOrOne("v:path")  # pyright: ignore[reportAssignmentType]
+    textbox: CT_VmlTextbox = ZeroOrOne("v:textbox")  # pyright: ignore[reportAssignmentType]
+
+    @classmethod
+    def new_textbox_shape(
+        cls,
+        shape_id: str,
+        style: str,
+        textbox_content: CT_TxbxContent,
+        inset: str = "0pt,0pt,0pt,0pt",
+        layout_flow: str = "horizontal-ideographic",
+    ) -> CT_VmlShape:
+        """Create a new VML shape containing a textbox."""
+        shape = cast(CT_VmlShape, parse_xml(cls._textbox_shape_xml()))
+
+        # Set shape attributes using lxml set method
+        shape.set("id", shape_id)
+        shape.set("type", "#_x0000_t202")
+        shape.set("style", style)
+        shape.set("filled", "false")
+        shape.set("stroked", "false")
+
+        # Create and configure textbox
+        textbox = shape.get_or_add_textbox()
+        textbox.set("inset", inset)
+        textbox.set("style", f"layout-flow:{layout_flow};")
+        textbox.append(textbox_content)
+
+        return shape
+
+    @classmethod
+    def _textbox_shape_xml(cls):
+        return (
+            "<v:shape %s>\n"
+            '  <v:fill on="false"/>\n'
+            '  <v:stroke on="false"/>\n'
+            "  <v:path/>\n"
+            "  <v:textbox/>\n"
+            "</v:shape>" % nsdecls("v", "w", "o")
+        )
+
+
+class CT_Pict(BaseOxmlElement):
+    """``<w:pict>`` element, container for VML objects like textboxes."""
+
+    shape: CT_VmlShape = ZeroOrOne("v:shape")  # pyright: ignore[reportAssignmentType]

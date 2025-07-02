@@ -8,8 +8,9 @@ from docx.drawing import Drawing
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_BREAK
 from docx.oxml.drawing import CT_Drawing
+from docx.oxml.shape import CT_VmlShape
 from docx.oxml.text.pagebreak import CT_LastRenderedPageBreak
-from docx.shape import InlineShape
+from docx.shape import InlineShape, Textbox
 from docx.shared import StoryChild
 from docx.styles.style import CharacterStyle
 from docx.text.font import Font
@@ -94,6 +95,87 @@ class Run(StoryChild):
         """
         t = self._r.add_t(text)
         return _Text(t)
+
+    def add_textbox(
+        self,
+        text: str,
+        left: float,
+        top: float,
+        width: float,
+        height: float,
+        font_size: int = 12,
+        z_index: int = 0xFFFFFFFF,
+        direction: str = "horizontal",
+    ):
+        """Add a textbox to this run.
+
+        Args:
+            text: Text content for the textbox
+            left: Left position in points
+            top: Top position in points
+            width: Width in points
+            height: Height in points
+            font_size: Font size for the text (default: 12)
+            z_index: Z-index for layering (default: 0xFFFFFFFF)
+            direction: Text direction, "horizontal" or "vertical" (default: "horizontal")
+
+        Returns:
+            The textbox object (currently a CT_Pict element)
+        """
+        from docx.oxml.ns import nsdecls
+        from docx.oxml.parser import parse_xml
+        from docx.oxml.shape import CT_Pict, CT_TxbxContent
+
+        # Create paragraph XML for textbox content
+        p_xml = self._create_textbox_paragraph_xml(text, font_size)
+
+        # Create textbox content element using parse_xml
+        txbx_content_xml = f"<w:txbxContent {nsdecls('w')}>{p_xml}</w:txbxContent>"
+        txbx_content = cast(CT_TxbxContent, parse_xml(txbx_content_xml))
+
+        # Create VML shape with textbox
+        style = (
+            f"position:absolute;"
+            f"margin-left:{round(left, 3)}pt;"
+            f"margin-top:{round(top, 3)}pt;"
+            f"mso-position-vertical-relative:text;"
+            f"mso-position-horizontal-relative:text;"
+            f"width:{round(width, 3)}pt;"
+            f"height:{round(height, 3)}pt;"
+            f"z-index:{z_index};"
+        )
+
+        inset = "0mm,0mm,0mm,0mm"
+        layout_flow = "horizontal" if direction == "horizontal" else "vertical-ideographic"
+
+        shape = CT_VmlShape.new_textbox_shape(
+            shape_id="_x0000_s6",
+            style=style,
+            textbox_content=txbx_content,
+            inset=inset,
+            layout_flow=layout_flow,
+        )
+
+        # Create w:pict element using parse_xml
+        pict_xml = f"<w:pict {nsdecls('w', 'v', 'o')}></w:pict>"
+        pict = cast(CT_Pict, parse_xml(pict_xml))
+        pict.append(shape)
+
+        # Add pict to the run
+        self._r.append(pict)
+
+        return Textbox(pict)
+
+    def _create_textbox_paragraph_xml(self, text: str, font_size: int) -> str:
+        """Create XML for a paragraph within a textbox."""
+        return (
+            f'<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f"<w:r>"
+            f'<w:rPr><w:sz w:val="{font_size * 2}"/></w:rPr>'  # Word uses half-points
+            f"<w:t>{text}</w:t>"
+            f"</w:r>"
+            f"</w:p>"
+        )
 
     @property
     def bold(self) -> bool | None:
