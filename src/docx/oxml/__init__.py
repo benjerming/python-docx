@@ -23,6 +23,14 @@ from docx.oxml.shape import (
     CT_PositiveSize2D,
     CT_ShapeProperties,
     CT_Transform2D,
+    # VML elements for textbox support
+    CT_Pict,
+    CT_VmlShape,
+    CT_VmlTextbox,
+    CT_TxbxContent,
+    CT_VmlFill,
+    CT_VmlStroke,
+    CT_VmlPath,
 )
 from docx.oxml.shared import CT_DecimalNumber, CT_OnOff, CT_String
 from docx.oxml.text.hyperlink import CT_Hyperlink
@@ -60,6 +68,17 @@ register_element_cls("wp:anchor", CT_Anchor)
 register_element_cls("wp:docPr", CT_NonVisualDrawingProps)
 register_element_cls("wp:extent", CT_PositiveSize2D)
 register_element_cls("wp:inline", CT_Inline)
+
+# ---------------------------------------------------------------------------
+# VML-related elements for textbox support
+
+register_element_cls("w:pict", CT_Pict)
+register_element_cls("v:shape", CT_VmlShape)
+register_element_cls("v:textbox", CT_VmlTextbox)
+register_element_cls("w:txbxContent", CT_TxbxContent)
+register_element_cls("v:fill", CT_VmlFill)
+register_element_cls("v:stroke", CT_VmlStroke)
+register_element_cls("v:path", CT_VmlPath)
 
 # ---------------------------------------------------------------------------
 # hyperlink-related elements
