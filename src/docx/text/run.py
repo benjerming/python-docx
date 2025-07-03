@@ -128,15 +128,14 @@ class Run(StoryChild):
         from docx.oxml.parser import parse_xml
         from docx.oxml.shape import CT_Pict, CT_TxbxContent
 
-        # Create textbox content element with an empty paragraph if no text provided
+        # Create textbox content element
         if text:
             p_xml = self._create_textbox_paragraph_xml(text, font_size)
+            # Create textbox content element with paragraph
+            txbx_content_xml = f"<w:txbxContent {nsdecls('w')}>{p_xml}</w:txbxContent>"
         else:
-            # Create empty paragraph
-            p_xml = f'<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:p>'
-
-        # Create textbox content element using parse_xml
-        txbx_content_xml = f"<w:txbxContent {nsdecls('w')}>{p_xml}</w:txbxContent>"
+            # Create empty textbox content without any paragraphs
+            txbx_content_xml = f"<w:txbxContent {nsdecls('w')}></w:txbxContent>"
         txbx_content = cast(CT_TxbxContent, parse_xml(txbx_content_xml))
 
         # Set position relative attributes based on position_relative parameter

@@ -5,10 +5,12 @@ A shape is a visual object that appears on the drawing layer of a document.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from docx.enum.shape import WD_INLINE_SHAPE
-from docx.oxml.ns import nsmap
+from docx.oxml.ns import nsdecls, nsmap
+from docx.oxml.parser import parse_xml
+from docx.oxml.text.paragraph import CT_P
 from docx.shared import Parented
 
 if TYPE_CHECKING:
@@ -16,6 +18,9 @@ if TYPE_CHECKING:
     from docx.oxml.shape import CT_Inline, CT_Pict
     from docx.parts.story import StoryPart
     from docx.shared import Length
+    from docx.styles.style import CharacterStyle
+    from docx.text.paragraph import Paragraph
+    from docx.text.run import Run
 
 
 class InlineShapes(Parented):
@@ -106,11 +111,7 @@ class InlineShape:
 class Textbox:
     """Proxy for a VML textbox element, providing access to textbox properties and content."""
 
-    def __init__(self, pict: CT_Pict, run=None):
-        from typing import TYPE_CHECKING
-        if TYPE_CHECKING:
-            from docx.text.run import Run
-        
+    def __init__(self, pict: CT_Pict, run: Run | None = None):
         super(Textbox, self).__init__()
         self._pict = pict
         self._shape = pict.shape
@@ -118,14 +119,11 @@ class Textbox:
         self._run: Run | None = run  # Reference to the run that contains this textbox
 
     @property
-    def paragraphs(self):
+    def paragraphs(self) -> list[Paragraph]:
         """A list of Paragraph objects for each paragraph in the textbox."""
-        from docx.text.paragraph import Paragraph
-        
+
         txbx_content = self._textbox.txbxContent
-        if txbx_content is None:
-            return []
-        
+
         # Use the run as parent for story part access
         parent = self._run if self._run is not None else self
         try:
@@ -134,51 +132,52 @@ class Textbox:
             # Fallback if p_lst doesn't exist
             paragraphs = []
             for child in txbx_content:
-                if child.tag.endswith('}p'):  # Check for paragraph elements
+                if child.tag.endswith("}p"):  # Check for paragraph elements
                     paragraphs.append(Paragraph(child, parent))
             return paragraphs
 
-    def add_paragraph(self, text: str = "", style=None):
+    def add_paragraph(self, text: str | None = None, style: str | CharacterStyle | None = None):
         """Add a new paragraph to the textbox.
-        
+
         Args:
             text: Initial text for the paragraph
             style: Paragraph style to apply
-            
+
         Returns:
             The new Paragraph object
         """
-        from docx.oxml.parser import parse_xml
         from docx.text.paragraph import Paragraph
-        
+
         # Create new paragraph XML
-        p_xml = '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:p>'
-        p_element = parse_xml(p_xml)
-        
+        w_p_xml = (
+            '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:p>'
+        )
+        w_p = cast(CT_P, parse_xml(w_p_xml))
+
         # Get or create textbox content
         txbx_content = self._textbox.txbxContent
-        if txbx_content is None:
-            # Create textbox content if it doesn't exist
-            from docx.oxml.ns import nsdecls
-            txbx_content_xml = f"<w:txbxContent {nsdecls('w')}></w:txbxContent>"
-            txbx_content = parse_xml(txbx_content_xml)
-            self._textbox.append(txbx_content)
-        
+
+        # Create textbox content if it doesn't exist
+
+        txbx_content_xml = f"<w:txbxContent {nsdecls('w')}></w:txbxContent>"
+        txbx_content = parse_xml(txbx_content_xml)
+        self._textbox.append(txbx_content)
+
         # Add paragraph to textbox content
-        txbx_content.append(p_element)
-        
+        txbx_content.append(w_p)
+
         # Create Paragraph object using run as parent
         parent = self._run if self._run is not None else self
-        paragraph = Paragraph(p_element, parent)
-        
+        paragraph = Paragraph(w_p, parent)
+
         # Add text if provided
-        if text:
+        if text is not None:
             paragraph.add_run(text)
-            
+
         # Apply style if provided
         if style is not None:
             paragraph.style = style
-            
+
         return paragraph
 
     def clear(self):
@@ -191,8 +190,10 @@ class Textbox:
                     txbx_content.remove(p)
             except AttributeError:
                 # Fallback if p_lst doesn't exist
-                for child in list(txbx_content):  # Create a copy to avoid modification during iteration
-                    if child.tag.endswith('}p'):  # Check for paragraph elements
+                for child in list(
+                    txbx_content
+                ):  # Create a copy to avoid modification during iteration
+                    if child.tag.endswith("}p"):  # Check for paragraph elements
                         txbx_content.remove(child)
 
     @property
@@ -215,7 +216,7 @@ class Textbox:
         """
         # Clear existing content
         self.clear()
-        
+
         # Add new paragraph with the text
         if value:
             self.add_paragraph(value)
